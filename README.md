@@ -8,7 +8,7 @@ There are two types in this package:
 
 - The main generic type `struct IntegralRational`, which uses any `SignedNumeric` for its numerator & denominator.  All the functionality in the package is defined relative to this type.
 
-- A convenience type, `Rat`, which is an `IntegralRational` with `Int`s as its numerator & denominator.  It really is just a type alias, but is far more convenient tp type than `IntegralRational<Int>`.
+- A convenience type, `Rat`, which is an `IntegralRational` with `Int`s as its numerator & denominator.  It really is just a type alias, but is far more convenient to type than `IntegralRational<Int>`.
 
 
 ## Creating an instance
@@ -16,6 +16,7 @@ There are two types in this package:
 Of the generic type:
 
 `let value = IntegralRational<Int64>(numerator:6, denominator:4)`
+
 `value.description` == "3/2"
 
 As you can see, IntegralRational automatically reduces when you `init`, which helps avoid overflow in later math operations.
@@ -39,17 +40,21 @@ These operators have the same crash-your-app problems that standard Swift types 
 
 When you want to risk loosing precision and convert to a floating point type, create one like so:
 
-`let rationalValue = Rat(numerator:1, denominator:10)
-let floatValue = Float(rationalValue)`
+`let rationalValue = Rat(numerator:1, denominator:10)`
+
+`let floatValue = Float(rationalValue)`
 
 That's right, Float will never be able to perfectly represent 0.1, because 5 is relatively prime to 2.
 
 Sometimes, you'll want to get a real improper fraction with a seriously integer integer part, call 
 
-`let value = Rat(numerator:3, denominator:2)
-let (integerPart, fractionalPart):(Int, Rat) = value.integerAndFractionalParts()
-print(integerPart)	// 1
-print(fractionalPart)	// 1/2`
+`let value = Rat(numerator:3, denominator:2)`
+
+`let (integerPart, fractionalPart):(Int, Rat) = value.integerAndFractionalParts()`
+
+`print(integerPart)	`// 1
+
+`print(fractionalPart)`	// 1/2
 
 which gives you an integer that's a legit integer, and a fractional part that's still an IntegralRational.
 
@@ -62,7 +67,7 @@ which gives you an integer that's a legit integer, and a fractional part that's 
 IntegralRational always encodes as an array of integers, `[numerator, denominator]` for efficiency.
 
 When decoding, it can support 3 formats:
-- 1 integer `[numerator]`  it assumes the denominator is zero
+- 1 integer `[numerator]`  it assumes the denominator is one.
 - 2 integers `[numerator, denominator]`, matching the encoding format.
 - 1 integer + an array of 2 integers `[i, [fn, fd]]` where `i` is the integer part, and `fn` and `fd` are the numerator and denominator (respectively) of the fractional part.  This is especially useful for humans manually encoding large numbers with fractional values.
 
@@ -70,11 +75,8 @@ Any other format throws a `IntegralRationalError.invalidJSON` error.
 
 
 
-
 ## Scope
 All the basic arithmetic functions are implemented in this package, addition, subtraction, multiplication, division and remainder.  And few special values, one, zero, etc..   But trigonometic and more advanced calculations have not been written.  For that, please convert into floating point values.
 
-
-## Watch out
-Many of the algorithms in this package are naïve.   This has implications for large values blowing out the available width of the integer types, and also for performance.  If you'd like to contribute algorithms which do a better job handling large values or optimize performance, feel free to make a pull request.
-
+## Performance
+Many of the algorithms in this package are naïve, so performance might not be as fast for large (or small) numbers as you'd hoped.  If you'd like to contribute an optimized algorithm, or an algorithm that avoid overflows, feel free to make a Pull Request.  
