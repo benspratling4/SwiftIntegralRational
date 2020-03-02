@@ -11,9 +11,70 @@ There are two types in this package:
 - A convenience type, `Rat`, which is an `IntegralRational` with `Int`s as its numerator & denominator.  It really is just a type alias, but is far more convenient tp type than `IntegralRational<Int>`.
 
 
-Scope
+## Creating an instance
+
+Of the generic type:
+
+`let value = IntegralRational<Int64>(numerator:6, denominator:4)`
+`value.description` == "3/2"
+
+As you can see, IntegralRational automatically reduces when you `init`, which helps avoid overflow in later math operations.
+
+Of the Rat type
+
+`let value = Rat(numerator:3, denominator:2)`
+
+If your initial value is an integer, you can use just 
+
+`let pureIntegralValue = Rat(3)`
+and IntegralRational will assume a denominator of 1.
+`pureIntegralValue.description` == "3/1"
+
+
+## Working with instances
+
+Basic math works just like built-in integer and floating point types, using standard operators like `+`, `-`, `*`, and `/`.
+
+These operators have the same crash-your-app problems that standard Swift types would encounter for operations that overflow or divide by zero.  So watch out for operations that might end up dividing by zero or make products that overflow the max integer value.
+
+When you want to risk loosing precision and convert to a floating point type, create one like so:
+
+`let rationalValue = Rat(numerator:1, denominator:10)
+let floatValue = Float(rationalValue)`
+
+That's right, Float will never be able to perfectly represent 0.1, because 5 is relatively prime to 2.
+
+Sometimes, you'll want to get a real improper fraction with a seriously integer integer part, call 
+
+`let value = Rat(numerator:3, denominator:2)
+let (integerPart, fractionalPart):(Int, Rat) = value.integerAndFractionalParts()
+print(integerPart)	// 1
+print(fractionalPart)	// 1/2`
+
+which gives you an integer that's a legit integer, and a fractional part that's still an IntegralRational.
+
+`.quotientAndRemainder(dividingBy:)` makes similar results but by dividing by values other than 1.
+
+
+
+## Codable
+
+IntegralRational always encodes as an array of integers, `[numerator, denominator]` for efficiency.
+
+When decoding, it can support 3 formats:
+- 1 integer `[numerator]`  it assumes the denominator is zero
+- 2 integers `[numerator, denominator]`, matching the encoding format.
+- 1 integer + an array of 2 integers `[i, [fn, fd]]` where `i` is the integer part, and `fn` and `fd` are the numerator and denominator (respectively) of the fractional part.  This is especially useful for humans manually encoding large numbers with fractional values.
+
+Any other format throws a `IntegralRationalError.invalidJSON` error.
+
+
+
+
+## Scope
 All the basic arithmetic functions are implemented in this package, addition, subtraction, multiplication, division and remainder.  And few special values, one, zero, etc..   But trigonometic and more advanced calculations have not been written.  For that, please convert into floating point values.
 
 
-Watch out
+## Watch out
 Many of the algorithms in this package are naïve.   This has implications for large values blowing out the available width of the integer types, and also for performance.  If you'd like to contribute algorithms which do a better job handling large values or optimize performance, feel free to make a pull request.
+

@@ -411,3 +411,14 @@ extension SignedInteger {
 		}
 	}
 }
+
+
+
+extension IntegralRational : Hashable {
+	
+	public func hash(into hasher: inout Hasher) {
+		numerator.hash(into: &hasher)
+		denominator.hash(into: &hasher)
+	}
+	
+}
