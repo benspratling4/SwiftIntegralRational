@@ -50,7 +50,7 @@ Sometimes, you'll want to get a real improper fraction with a seriously integer 
 
 `let value = Rat(numerator:3, denominator:2)`
 
-`let (integerPart, fractionalPart):(Int, Rat) = value.integerAndFractionalParts()`
+`let (integerPart, fractionalPart):(Int, Rat) = value.mixedFraction`
 
 `print(integerPart)	`// 1
 

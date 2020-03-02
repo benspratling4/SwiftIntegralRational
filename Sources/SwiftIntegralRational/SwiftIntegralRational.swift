@@ -5,6 +5,7 @@ public typealias Rat = IntegralRational<Int>
 
 
 ///Represents a pure rational number, expressed by the ratio of two signed integers
+///the numerator & denominator conform to SignedInteger not because I'm glad that requires BinaryInteger conformance, but because mere SignedNumeric has no division operators, and that makes writing several of these methods harder than they need to be.  If someone can help eliminate the need for all / operators in these method implementations, I'm happy to release a version where the IntType does not require binary conformance.
 public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, SignedNumeric, Codable {
 	
 	//MARK: Instance vars
@@ -153,29 +154,27 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 	
 	public static func +(lhs: IntegralRational<IntType>, rhs: IntegralRational<IntType>) -> IntegralRational<IntType> {
 		var newValue = lhs
-		newValue += rhs
+		newValue += rhs	//for copy performance, implementation is in mutating operator
 		return newValue
 	}
 	
 	public static func +=(lhs: inout IntegralRational<IntType>, rhs: IntegralRational<IntType>) {
-		let oldLhsDenominator = lhs.denominator
-		lhs.denominator *= rhs.denominator
 		lhs.numerator *= rhs.denominator
-		lhs.numerator += rhs.numerator * oldLhsDenominator
+		lhs.numerator += rhs.numerator * lhs.denominator
+		lhs.denominator *= rhs.denominator
 		lhs.reduce()
 	}
 	
 	public static func -(lhs: IntegralRational<IntType>, rhs: IntegralRational<IntType>) -> IntegralRational<IntType> {
 		var newValue:IntegralRational<IntType> = lhs
-		newValue -= rhs
+		newValue -= rhs	//for copy performance, implementation is in mutating operator
 		return newValue
 	}
 	
 	public static func -=(lhs: inout IntegralRational<IntType>, rhs: IntegralRational<IntType>) {
-		let oldLhsDenominator = lhs.denominator
 		lhs.numerator *= rhs.denominator
+		lhs.numerator -= rhs.numerator * lhs.denominator
 		lhs.denominator *= rhs.denominator
-		lhs.numerator -= rhs.numerator * oldLhsDenominator
 		lhs.reduce()
 	}
 	
@@ -193,7 +192,7 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 	
 	public static func /(lhs: IntegralRational<IntType>, rhs: IntegralRational<IntType>) -> IntegralRational<IntType> {
 		var newValue:IntegralRational<IntType> = lhs
-		newValue /= rhs
+		newValue /= rhs	//for copy performance, implementation is in mutating operator
 		return newValue
 	}
 	
@@ -222,8 +221,16 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 		}
 		let inverseOfDividend:IntegralRational = IntegralRational(numerator: other.denominator, denominator: other.numerator)
 		let fullQuotient:IntegralRational = self * inverseOfDividend	//division is accomplished by multiplying by the inverse of the dividend
-		let (_, leftOvers) = fullQuotient.integerAndFractionalParts()
+		let (_, leftOvers) = fullQuotient.mixedFraction
 		self = leftOvers * other
+	}
+	
+	public static func % (lhs: IntegralRational<IntType>, rhs: IntegralRational<IntType>) -> IntegralRational<IntType> {
+		return lhs.remainder(dividingBy: rhs)
+	}
+
+	public static func %= (lhs: inout IntegralRational<IntType>, rhs: IntegralRational<IntType>) {
+		return lhs.formRemainder(dividingBy: rhs)
 	}
 	
 	///useful to get a pure integer quotient, but the remainder may still be an IntegralRational
@@ -236,13 +243,20 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 		}
 		let inverseOfDividend:IntegralRational = IntegralRational(numerator: rhs.denominator, denominator: rhs.numerator)
 		let fullQuotient:IntegralRational = self * inverseOfDividend	//division is accomplished by multiplying by the inverse of the dividend
-		let (integerPart, leftOvers) = fullQuotient.integerAndFractionalParts()
+		let (integerPart, leftOvers) = fullQuotient.mixedFraction
 		return (integerPart, leftOvers * rhs)
 	}
 	
 	
 	///such that Rat(result.0) + result.1 == self
+	@available(*, deprecated, renamed: "mixedFraction")
 	public func integerAndFractionalParts()->(IntType, IntegralRational<IntType>) {
+		let (integerPart, fractionalPart) = mixedFraction
+		return (integerPart, fractionalPart)
+	}
+	
+	///such that Rat($0.mixedFraction.integerPart) + $0.mixedFraction.fractionalPart == $0
+	public var mixedFraction:(integerPart:IntType, fractionalPart:IntegralRational<IntType>) {
 		let (integerPart, leftOvers) = numerator.quotientAndRemainder(dividingBy:denominator)
 		return (integerPart, IntegralRational(numerator: leftOvers, denominator: denominator))
 	}
@@ -260,7 +274,8 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 		return denominator == 0
 	}
 	
-	public mutating func round(_ rule: FloatingPointRoundingRule) {
+	///default rule .toNearestOrAwayFromZero
+	public mutating func round(_ rule: FloatingPointRoundingRule = .toNearestOrAwayFromZero) {
 		if denominator == 1 {
 			return	//it's already rounded
 		}
@@ -322,12 +337,14 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 		}
 	}
 	
-	public func rounded(_ rule: FloatingPointRoundingRule) -> IntegralRational<IntType> {
+	///default rule .toNearestOrAwayFromZero
+	public func rounded(_ rule: FloatingPointRoundingRule = .toNearestOrAwayFromZero) -> IntegralRational<IntType> {
 		var newValue:IntegralRational<IntType> = self
 		newValue.round(rule)
 		return newValue
 	}
 	
+	@available(*, deprecated, message: "To be more Swifty, use FloatingPoint(self) instead.")
 	///succeeds if FloatType(exactly:numerator) and FloatType(exactly:denominator) succeed
 	public func floatingPoint<FloatType:FloatingPoint>()->FloatType? where IntType : BinaryInteger {
 		guard let numer:FloatType = FloatType(exactly:numerator) else { return nil }
@@ -367,7 +384,7 @@ extension IntegralRational : CustomDebugStringConvertible where IntType : Custom
 extension SignedInteger where Self : Codable {
 	
 	@inlinable public init?(exactly source: IntegralRational<Self>) {
-		let (integerPart, fractionalPart) = source.integerAndFractionalParts()
+		let (integerPart, fractionalPart) = source.mixedFraction
 		if fractionalPart != .zero { return nil }
 		self = integerPart
 	}

@@ -105,13 +105,13 @@ final class SwiftIntegralRationalTests: XCTestCase {
 	
 	func testIntegerPart() {
 		let threeHalves = Rat(numerator: 3, denominator: 2)
-		let (integerPart, fractionalPart) = threeHalves.integerAndFractionalParts()
+		let (integerPart, fractionalPart) = threeHalves.mixedFraction
 		XCTAssertEqual(integerPart, 1)
 		XCTAssertEqual(fractionalPart, Rat(numerator: 1, denominator: 2))
 		
 		
 		let negativeThreeHalves = Rat(numerator: -3, denominator: 2)
-		let (integerPart2, fractionalPart2) = negativeThreeHalves.integerAndFractionalParts()
+		let (integerPart2, fractionalPart2) = negativeThreeHalves.mixedFraction
 		XCTAssertEqual(integerPart2, -1)
 		XCTAssertEqual(fractionalPart2, Rat(numerator: -1, denominator: 2))
 	}
