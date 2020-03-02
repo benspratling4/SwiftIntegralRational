@@ -36,13 +36,17 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 	
 	//MARK: - Codable
 	
+	///when encoding, it is always encoded as `[numerator, denominator]`
 	public func encode(to encoder: Encoder) throws {
 		var container = encoder.unkeyedContainer()
 		try container.encode(numerator)
 		try container.encode(denominator)
 	}
 	
-	///Rational
+	///To make it easy for humans to craft values manually, decoding suports 3 formats:
+	///	[n] array with single integer - the integer becomes the numerator, the denominator is assumed to be 1
+	/// [n, d]	array with two integers - the first integer becomes the numerator, 2nd the denominator
+	///	[i, [fn, fd]]	array with an integer followed by an array of 2 integers, this is a "mixed fraction" where the i is the whole part, and the fn and fd are the fractional part, the final number is n = i * fd + fn, d = fd
 	public init(from decoder: Decoder) throws {
 		var container = try decoder.unkeyedContainer()
 		guard let count:Int = container.count
@@ -51,10 +55,22 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 				throw IntegralRationalError.invalidJSON
 		}
 		numerator = try container.decode(IntType.self)
-		if count > 1 {
-			denominator = try container.decode(IntType.self)
-		} else {
+		if count < 2 {
 			denominator = 1
+			return
+		}
+		do {
+			denominator = try container.decode(IntType.self)
+		} catch {
+			//if the denominator is instead an array of ints, then we have a mixed fraction
+			let fractionParts:[IntType] = try container.decode([IntType].self)
+			if fractionParts.count != 2 {
+				throw IntegralRationalError.invalidJSON
+			}
+			denominator = fractionParts[1]
+			let newNumerator = numerator * denominator + fractionParts[0]
+			numerator = newNumerator
+			reduce()
 		}
 	}
 	
