@@ -6,19 +6,22 @@ public typealias Rat = IntegralRational<Int>
 
 ///Represents a pure rational number, expressed by the ratio of two signed integers
 ///the numerator & denominator conform to SignedInteger not because I'm glad that requires BinaryInteger conformance, but because mere SignedNumeric has no division operators, and that makes writing several of these methods harder than they need to be.  If someone can help eliminate the need for all / operators in these method implementations, I'm happy to release a version where the IntType does not require binary conformance.
-public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, SignedNumeric, Codable {
+public struct IntegralRational<IntType:SignedInteger> : Comparable, SignedNumeric {
 	
-	//MARK: Instance vars
+	//MARK: - Instance vars
 	public var numerator:IntType
 	public var denominator:IntType
 	
-	//MARK: Inits
+	//MARK: - Init's
 	///really really bad things happen when denominator is zero
 	public init(numerator:IntType, denominator:IntType) {
 		self.numerator = numerator
 		self.denominator = denominator
 		reduce()
 	}
+	
+	
+	//MARK: - reduction
 	
 	///init and == both reduce automatically, you should only need this if you have to set the properties explicitly, which should be very rare
 	public func reduced()->IntegralRational<IntType> {
@@ -35,69 +38,61 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 	}
 	
 	
-	//MARK: - Codable
-	
-	///when encoding, it is always encoded as `[numerator, denominator]`
-	public func encode(to encoder: Encoder) throws {
-		var container = encoder.unkeyedContainer()
-		try container.encode(numerator)
-		try container.encode(denominator)
-	}
-	
-	///To make it easy for humans to craft values manually, decoding suports 3 formats:
-	///	[n] array with single integer - the integer becomes the numerator, the denominator is assumed to be 1
-	/// [n, d]	array with two integers - the first integer becomes the numerator, 2nd the denominator
-	///	[i, [fn, fd]]	array with an integer followed by an array of 2 integers, this is a "mixed fraction" where the i is the whole part, and the fn and fd are the fractional part, the final number is n = i * fd + fn, d = fd
-	public init(from decoder: Decoder) throws {
-		var container = try decoder.unkeyedContainer()
-		guard let count:Int = container.count
-			,count > 0
-			else {
-				throw IntegralRationalError.invalidJSON
-		}
-		numerator = try container.decode(IntType.self)
-		if count < 2 {
-			denominator = 1
-			return
-		}
-		do {
-			denominator = try container.decode(IntType.self)
-		} catch {
-			//if the denominator is instead an array of ints, then we have a mixed fraction
-			let fractionParts:[IntType] = try container.decode([IntType].self)
-			if fractionParts.count != 2 {
-				throw IntegralRationalError.invalidJSON
-			}
-			denominator = fractionParts[1]
-			let newNumerator = numerator * denominator + fractionParts[0]
-			numerator = newNumerator
-			reduce()
-		}
-	}
-	
-	
 	//MARK: - Equatable
+	
 	public static func ==<IntType>(lhs:IntegralRational<IntType>, rhs:IntegralRational<IntType>)->Bool {
 		return lhs.numerator * rhs.denominator == rhs.numerator * lhs.denominator
 	}
 	
 	
 	//MARK: - Comparable
+	
 	public static func < <IntType>(lhs:IntegralRational<IntType>, rhs:IntegralRational<IntType>)->Bool {
 		return lhs.numerator * rhs.denominator < rhs.numerator * lhs.denominator
 	}
 	
 	
-	//MARK: - SignedNumeric
+	//MARK: - AdditiveArithmetic
 	
-	prefix public static func -(operand: IntegralRational<IntType>) -> IntegralRational<IntType> {
-		var newValue:IntegralRational<IntType> = operand
-		newValue.negate()
+	public static var zero: IntegralRational<IntType> {
+		IntegralRational<IntType>(integerLiteral: 0)
+	}
+	
+	public static func +(lhs: IntegralRational<IntType>, rhs: IntegralRational<IntType>) -> IntegralRational<IntType> {
+		var newValue = lhs
+		newValue += rhs	//for copy performance, implementation is in mutating operator
 		return newValue
 	}
 	
-	public mutating func negate() {
-		numerator.negate()
+	public static func +=(lhs: inout IntegralRational<IntType>, rhs: IntegralRational<IntType>) {
+		lhs.numerator *= rhs.denominator
+		lhs.numerator += rhs.numerator * lhs.denominator
+		lhs.denominator *= rhs.denominator
+		lhs.reduce()
+	}
+	
+	public static func -(lhs: IntegralRational<IntType>, rhs: IntegralRational<IntType>) -> IntegralRational<IntType> {
+		var newValue:IntegralRational<IntType> = lhs
+		newValue -= rhs	//for copy performance, implementation is in mutating operator
+		return newValue
+	}
+	
+	public static func -=(lhs: inout IntegralRational<IntType>, rhs: IntegralRational<IntType>) {
+		lhs.numerator *= rhs.denominator
+		lhs.numerator -= rhs.numerator * lhs.denominator
+		lhs.denominator *= rhs.denominator
+		lhs.reduce()
+	}
+	
+	
+	//MARK: - Inspired by AdditiveArithmetic
+	
+	public static var one: IntegralRational<IntType> {
+		IntegralRational<IntType>(integerLiteral: 1)
+	}
+	
+	public static var negativeOne: IntegralRational<IntType> {
+		IntegralRational<IntType>(integerLiteral: -1)
 	}
 	
 	
@@ -143,47 +138,23 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 	}
 	
 	
+	//MARK: - SignedNumeric
 	
-	/*
-	public init?<T>(exactly source: T) where T : BinaryFloatingPoint {
-		//TODO: write me
-	}
-*/
-	
-	//MARK: - AdditiveArithmetic
-	
-	public static func +(lhs: IntegralRational<IntType>, rhs: IntegralRational<IntType>) -> IntegralRational<IntType> {
-		var newValue = lhs
-		newValue += rhs	//for copy performance, implementation is in mutating operator
+	prefix public static func -(operand: IntegralRational<IntType>) -> IntegralRational<IntType> {
+		var newValue:IntegralRational<IntType> = operand
+		newValue.negate()
 		return newValue
 	}
 	
-	public static func +=(lhs: inout IntegralRational<IntType>, rhs: IntegralRational<IntType>) {
-		lhs.numerator *= rhs.denominator
-		lhs.numerator += rhs.numerator * lhs.denominator
-		lhs.denominator *= rhs.denominator
-		lhs.reduce()
-	}
-	
-	public static func -(lhs: IntegralRational<IntType>, rhs: IntegralRational<IntType>) -> IntegralRational<IntType> {
-		var newValue:IntegralRational<IntType> = lhs
-		newValue -= rhs	//for copy performance, implementation is in mutating operator
-		return newValue
-	}
-	
-	public static func -=(lhs: inout IntegralRational<IntType>, rhs: IntegralRational<IntType>) {
-		lhs.numerator *= rhs.denominator
-		lhs.numerator -= rhs.numerator * lhs.denominator
-		lhs.denominator *= rhs.denominator
-		lhs.reduce()
+	public mutating func negate() {
+		numerator.negate()
 	}
 	
 	
-	
-	//MARK: - similar to FloatingPoint
+	//MARK: - Inspired by FloatingPoint
 	
 	public var sign: FloatingPointSign  {
-		if numerator < 0 {
+		if numerator >= 0 {
 			return .plus
 		} else {
 			return .minus
@@ -274,6 +245,9 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 		return denominator == 0
 	}
 	
+	//TODO: isSignalingNaN
+	//TODO: isFinite
+	
 	///default rule .toNearestOrAwayFromZero
 	public mutating func round(_ rule: FloatingPointRoundingRule = .toNearestOrAwayFromZero) {
 		if denominator == 1 {
@@ -344,14 +318,116 @@ public struct IntegralRational<IntType:SignedInteger&Codable> : Comparable, Sign
 		return newValue
 	}
 	
+	
+	//TODO: public func truncatingRemainder(dividingBy other: Self) -> Self
+	//TODO: public mutating func formTruncatingRemainder(dividingBy other: Self)
+	
+	//MARK: - Inspired by BinaryInteger
+	
+	public func signum()->IntegralRational<IntType> {
+		if isZero {
+			return .zero
+		}
+		else if numerator.signum() == denominator.signum() {
+			return .one
+		}
+		else {
+			return .negativeOne
+		}
+	}
+	
+	
+	//TODO: public init?(exactly other: FloatingPoint)
+	//TODO: init<T>(clamping source: T) where T : BinaryInteger
+	
+}
+
+
+extension SignedInteger {
+	/// gets the towards-zero rounded value, round first if desiring other methods
+	public init(_ value:IntegralRational<Self>) {
+		self = value.rounded(.towardZero).numerator
+	}
+	
+}
+
+
+//MARK: - Conditional Conformances
+
+extension IntegralRational where IntType : BinaryInteger {
+	
 	@available(*, deprecated, message: "To be more Swifty, use FloatingPoint(self) instead.")
 	///succeeds if FloatType(exactly:numerator) and FloatType(exactly:denominator) succeed
-	public func floatingPoint<FloatType:FloatingPoint>()->FloatType? where IntType : BinaryInteger {
+	public func floatingPoint<FloatType:FloatingPoint>()->FloatType? {
 		guard let numer:FloatType = FloatType(exactly:numerator) else { return nil }
 		guard let denom:FloatType = FloatType(exactly:denominator) else { return nil }
 		return numer / denom
 	}
 	
+	public var doubleValue:Double {
+		return Double(numerator)/Double(denominator)
+	}
+}
+
+
+//MARK: - Hashable
+
+extension IntegralRational : Hashable where IntType : Hashable {
+	public func hash(into hasher: inout Hasher) {
+		hasher.combine(numerator)
+		hasher.combine(denominator)
+	}
+}
+
+
+//MARK: - Encodable & Decodable
+
+extension IntegralRational : Encodable where IntType : Encodable {
+	///the exported format is always an array of two integers, the numerator then denominator
+	public func encode(to encoder: Encoder) throws {
+		var container = encoder.unkeyedContainer()
+		try container.encode(numerator)
+		try container.encode(denominator)
+	}
+}
+
+
+extension IntegralRational : Decodable where IntType : Decodable {
+	///To make it easy for humans to craft values manually, decoding suports 3 formats:
+	///	[n] array with single integer - the integer becomes the numerator, the denominator is assumed to be 1
+	/// [n, d]	array with two integers - the first integer becomes the numerator, 2nd the denominator
+	///	[i, [fn, fd]]	array with an integer followed by an array of 2 integers, this is a "mixed fraction" where the i is the whole part, and the fn and fd are the fractional part, the final number is n = i * fd + fn, d = fd
+	public init(from decoder: Decoder) throws {
+		var container = try decoder.unkeyedContainer()
+		guard let count:Int = container.count
+			,count > 0
+			else {
+				throw IntegralRationalError.invalidJSON
+		}
+		numerator = try container.decode(IntType.self)
+		if count < 2 {
+			denominator = 1
+			return
+		}
+		do {
+			denominator = try container.decode(IntType.self)
+		} catch {
+			//if the denominator is instead an array of ints, then we have a mixed fraction
+			let fractionParts:[IntType] = try container.decode([IntType].self)
+			if fractionParts.count != 2 {
+				throw IntegralRationalError.invalidJSON
+			}
+			denominator = fractionParts[1]
+			let newNumerator = numerator * denominator + fractionParts[0]
+			numerator = newNumerator
+			reduce()
+		}
+	}
+}
+
+
+public enum IntegralRationalError : Error {
+	case invalidJSON
 }
 
 
@@ -366,8 +442,7 @@ extension FloatingPoint {
 }
 
 
-
-extension IntegralRational : CustomStringConvertible {
+extension IntegralRational : CustomStringConvertible where IntType : CustomStringConvertible {
 	public var description: String {
 		return numerator.description + "/" + denominator.description
 	}
@@ -381,7 +456,9 @@ extension IntegralRational : CustomDebugStringConvertible where IntType : Custom
 }
 
 
-extension SignedInteger where Self : Codable {
+//TODO: when INT : FixedWidthInteger, implement arithmetic functions using overflow-reporting methods
+
+extension SignedInteger {
 	
 	@inlinable public init?(exactly source: IntegralRational<Self>) {
 		let (integerPart, fractionalPart) = source.mixedFraction
@@ -389,33 +466,6 @@ extension SignedInteger where Self : Codable {
 		self = integerPart
 	}
 	
-	/// gets the towards-zero rounded value, round first if desiring other methods
-	public init(_ value:IntegralRational<Self>) {
-		self = value.rounded(.towardZero).numerator
-	}
-	
-}
-
-public enum IntegralRationalError : Error {
-	case invalidJSON
-}
-
-
-private func GCD<IntType:SignedInteger&Codable>(num: IntType,  denom:IntType) -> IntType {
-	//this is a naïve implementation, could use a faster method for larger numbers.
-	var A = num
-	var B = denom
-	var r:IntType
-	while (abs(B) > 0) {
-		r = A % B
-		A = B
-		B = r
-	}
-	if (A >= 0) {
-		return A
-	} else {
-		return -A
-	}
 }
 
 
@@ -430,12 +480,21 @@ extension SignedInteger {
 }
 
 
+//MARK: - utilities
 
-extension IntegralRational : Hashable {
-	
-	public func hash(into hasher: inout Hasher) {
-		numerator.hash(into: &hasher)
-		denominator.hash(into: &hasher)
+private func GCD<IntType:SignedInteger>(num: IntType,  denom:IntType) -> IntType {
+	//this is a naïve implementation, could use a faster method for larger numbers.
+	var A = num
+	var B = denom
+	var r:IntType
+	while (abs(B) > 0) {
+		r = A % B
+		A = B
+		B = r
 	}
-	
+	if (A >= 0) {
+		return A
+	} else {
+		return -A
+	}
 }
