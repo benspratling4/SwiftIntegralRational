@@ -20,6 +20,11 @@ public struct IntegralRational<IntType:SignedInteger> : Comparable, SignedNumeri
 		reduce()
 	}
 	
+	///Convenience init for integers
+	public init(_ integerValue:IntType) {
+		self.numerator = integerValue
+		self.denominator = IntType(1)
+	}
 	
 	//MARK: - reduction
 	
