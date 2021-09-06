@@ -100,6 +100,10 @@ public struct IntegralRational<IntType:SignedInteger> : Comparable, SignedNumeri
 		IntegralRational<IntType>(integerLiteral: -1)
 	}
 	
+	public static var half:IntegralRational<IntType> {
+		IntegralRational(numerator:IntType(1), denominator:IntType(2))
+	}
+	
 	
 	//MARK: - ExpressibleByIntegerLiteral
 	
